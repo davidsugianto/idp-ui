@@ -1,0 +1,14 @@
+export const breakpoints = {
+  xs: 480,
+  sm: 576,
+  md: 768,
+  lg: 992,
+  xl: 1200,
+  xxl: 1600,
+} as const;
+
+export type Breakpoint = keyof typeof breakpoints;
+
+export function mediaQuery(bp: Breakpoint) {
+  return `@media (min-width: ${breakpoints[bp]}px)`;
+}
