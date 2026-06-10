@@ -1,0 +1,5 @@
+export { default as AdminDashboardPage } from './AdminDashboardPage';
+export { default as UserManagementPage } from './UserManagementPage';
+export { default as TeamManagementPage } from './TeamManagementPage';
+export { default as RoleManagementPage } from './RoleManagementPage';
+export { default as AuditLogPage } from './AuditLogPage';

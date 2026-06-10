@@ -1,0 +1,29 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: idp-ui-fe
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '3089:3089'
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./index.html:/app/index.html
+      - ./vite.config.ts:/app/vite.config.ts
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./tsconfig.node.json:/app/tsconfig.node.json
+      - ./vite-env.d.ts:/app/vite-env.d.ts
+    environment:
+      - VITE_API_BASE_URL=http://host.docker.internal:8989
+      - VITE_OIDC_ISSUER=http://localhost:8081/realms/idp-core
+      - VITE_OIDC_CLIENT_ID=idp-core
+      - VITE_OIDC_REDIRECT_URI=http://localhost:3089/auth/callback
+    networks:
+      - idp-network
+
+networks:
+  idp-network:
+    driver: bridge
