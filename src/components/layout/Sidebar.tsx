@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Drawer, Layout, Menu, theme } from 'antd';
-import { CloudServerOutlined, DashboardOutlined, SettingOutlined, TeamOutlined } from '@ant-design/icons';
+import { AimOutlined, AppstoreOutlined, CloudServerOutlined, DashboardOutlined, SettingOutlined, TeamOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -33,6 +33,16 @@ function Sidebar({ collapsed = false, onCollapse, isMobile = false }: SidebarPro
         key: '/environments',
         icon: <CloudServerOutlined />,
         label: 'Environments',
+      },
+      {
+        key: '/templates',
+        icon: <AppstoreOutlined />,
+        label: 'Templates',
+      },
+      {
+        key: '/delivery-targets',
+        icon: <AimOutlined />,
+        label: 'Delivery Targets',
       },
       ...(isAdmin
         ? [

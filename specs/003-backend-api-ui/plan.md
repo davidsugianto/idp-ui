@@ -1,6 +1,6 @@
 # Implementation Plan: Backend API UI Alignment
 
-**Branch**: `001-frontend-phase1-spec` | **Date**: 2026-06-10 | **Spec**: [`spec.md`](./spec.md)
+**Feature**: `003-backend-api-ui` | **Planning Branch at generation**: `001-frontend-phase1-spec` | **Date**: 2026-06-10 | **Spec**: [`spec.md`](./spec.md)
 
 **Input**: Feature specification from `/specs/003-backend-api-ui/spec.md`
 

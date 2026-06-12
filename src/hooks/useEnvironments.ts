@@ -2,20 +2,51 @@ import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createEnvironment,
+  createDeliveryTarget,
+  createTemplate,
+  createTemplateVersion,
   deleteEnvironment,
+  deleteDeliveryTarget,
+  deleteTemplate,
+  getDeliveryTarget,
   getEnvironment,
   getEnvironmentWorkloads,
+  getTemplate,
   listEnvironments,
+  listDeliveryTargets,
+  listTemplates,
+  listTemplateVersions,
   syncEnvironment,
+  updateDeliveryTarget,
 } from '@/services/environments';
 import { QUERY_KEYS } from '@/constants/api';
-import type { CreateEnvironmentRequest, EnvironmentListQuery } from '@/types/environment';
+import type {
+  CreateEnvironmentRequest,
+  CreateTemplateRequest,
+  CreateTemplateVersionRequest,
+  CreateDeliveryTargetRequest,
+  EnvironmentListQuery,
+} from '@/types/environment';
 
 export const environmentQueryKeys = {
   all: QUERY_KEYS.environments,
   list: (query?: EnvironmentListQuery) => QUERY_KEYS.environmentList(query),
   detail: (id: string) => QUERY_KEYS.environment(id),
   workloads: (id: string) => QUERY_KEYS.environmentWorkloads(id),
+};
+
+export const templateQueryKeys = {
+  all: QUERY_KEYS.templates,
+  list: (query?: Record<string, unknown>) => QUERY_KEYS.templateList(query),
+  detail: (id: string) => QUERY_KEYS.template(id),
+  versions: (templateId: string) => QUERY_KEYS.templateVersions(templateId),
+  version: (templateId: string, versionId: string) => QUERY_KEYS.templateVersion(templateId, versionId),
+};
+
+export const deliveryTargetQueryKeys = {
+  all: QUERY_KEYS.deliveryTargets,
+  list: (query?: Record<string, unknown>) => QUERY_KEYS.deliveryTargetList(query),
+  detail: (id: string) => QUERY_KEYS.deliveryTarget(id),
 };
 
 export function useEnvironments(query?: EnvironmentListQuery) {
@@ -104,6 +135,115 @@ export function useSyncEnvironment() {
         queryClient.invalidateQueries({ queryKey: environmentQueryKeys.workloads(id) }),
         queryClient.invalidateQueries({ queryKey: environmentQueryKeys.all }),
       ]);
+    },
+  });
+}
+
+export function useTemplates() {
+  return useQuery({
+    queryKey: templateQueryKeys.list(),
+    queryFn: () => listTemplates(),
+  });
+}
+
+export function useTemplateVersions(templateId: string) {
+  return useQuery({
+    queryKey: templateQueryKeys.versions(templateId),
+    queryFn: () => listTemplateVersions(templateId),
+    enabled: Boolean(templateId),
+  });
+}
+
+export function useTemplate(id: string) {
+  return useQuery({
+    queryKey: templateQueryKeys.detail(id),
+    queryFn: () => getTemplate(id),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: CreateTemplateRequest) => createTemplate(request),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: templateQueryKeys.all });
+    },
+  });
+}
+
+export function useDeleteTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deleteTemplate(id),
+    onSuccess: async (_data, id) => {
+      await queryClient.invalidateQueries({ queryKey: templateQueryKeys.all });
+      queryClient.removeQueries({ queryKey: templateQueryKeys.detail(id) });
+    },
+  });
+}
+
+export function useCreateTemplateVersion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ templateId, request }: { templateId: string; request: CreateTemplateVersionRequest }) =>
+      createTemplateVersion(templateId, request),
+    onSuccess: async (_data, { templateId }) => {
+      await queryClient.invalidateQueries({ queryKey: templateQueryKeys.versions(templateId) });
+    },
+  });
+}
+
+export function useDeliveryTarget(id: string) {
+  return useQuery({
+    queryKey: deliveryTargetQueryKeys.detail(id),
+    queryFn: () => getDeliveryTarget(id),
+    enabled: Boolean(id),
+  });
+}
+
+export function useDeliveryTargets() {
+  return useQuery({
+    queryKey: deliveryTargetQueryKeys.list(),
+    queryFn: () => listDeliveryTargets(),
+  });
+}
+
+export function useCreateDeliveryTarget() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: CreateDeliveryTargetRequest) => createDeliveryTarget(request),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: deliveryTargetQueryKeys.all });
+    },
+  });
+}
+
+export function useUpdateDeliveryTarget() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string; request: Partial<Pick<CreateDeliveryTargetRequest, 'availabilityState' | 'healthState'>> }) =>
+      updateDeliveryTarget(id, request),
+    onSuccess: async (_data, { id }) => {
+      await queryClient.invalidateQueries({ queryKey: deliveryTargetQueryKeys.all });
+      await queryClient.invalidateQueries({ queryKey: deliveryTargetQueryKeys.detail(id) });
+    },
+  });
+}
+
+export function useDeleteDeliveryTarget() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deleteDeliveryTarget(id),
+    onSuccess: async (_data, id) => {
+      await queryClient.invalidateQueries({ queryKey: deliveryTargetQueryKeys.all });
+      queryClient.removeQueries({ queryKey: deliveryTargetQueryKeys.detail(id) });
     },
   });
 }

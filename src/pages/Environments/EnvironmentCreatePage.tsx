@@ -5,15 +5,47 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '@/components/common/PageHeader';
 import EnvironmentCreateWizard from '@/components/environments/EnvironmentCreateWizard';
-import { useCreateEnvironment } from '@/hooks/useEnvironments';
-import { createEnvironmentRequestSchema, type CreateEnvironmentRequest } from '@/types/environment';
+import { useCreateEnvironment, useDeliveryTargets, useTemplateVersions, useTemplates } from '@/hooks/useEnvironments';
+import { parseCreateEnvironmentError } from '@/services/environments';
+import { createEnvironmentRequestSchema, type CreateEnvironmentError, type CreateEnvironmentRequest } from '@/types/environment';
 
 const { Text } = Typography;
+
+const BACKEND_FIELD_TO_FORM_PATH: Record<string, string> = {
+  name: 'name',
+  description: 'description',
+  git_repo_url: 'gitRepoUrl',
+  manifest_path: 'manifestPath',
+  git_revision: 'gitRevision',
+  template_version_id: 'templateVersionId',
+  delivery_target_id: 'deliveryTargetId',
+  expires_at: 'expiresAt',
+};
+
+function applyFieldErrors(
+  setError: ReturnType<typeof useForm<CreateEnvironmentRequest>>['setError'],
+  fieldErrors?: Record<string, string>,
+) {
+  if (!fieldErrors) return;
+  for (const [backendField, message] of Object.entries(fieldErrors)) {
+    const formPath = BACKEND_FIELD_TO_FORM_PATH[backendField];
+    if (formPath) {
+      setError(formPath as keyof CreateEnvironmentRequest, { message });
+    }
+  }
+}
 
 function EnvironmentCreatePage() {
   const navigate = useNavigate();
   const createMutation = useCreateEnvironment();
   const [isDirtyPromptOpen, setIsDirtyPromptOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [submitError, setSubmitError] = useState<CreateEnvironmentError | null>(null);
+
+  const templates = useTemplates();
+  const templateVersions = useTemplateVersions(selectedTemplateId);
+  const deliveryTargets = useDeliveryTargets();
+
   const form = useForm<CreateEnvironmentRequest>({
     resolver: zodResolver(createEnvironmentRequestSchema),
     defaultValues: {
@@ -22,19 +54,28 @@ function EnvironmentCreatePage() {
       gitRepoUrl: '',
       manifestPath: '',
       gitRevision: 'main',
-      clusterName: '',
-      resourceQuotaCpu: '',
-      resourceQuotaMemory: '',
+      templateVersionId: '',
+      templateInputs: undefined,
+      deliveryTargetId: '',
       expiresAt: '',
     },
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
-    const environment = await createMutation.mutateAsync(values);
-    navigate(`/environments/${environment.id}`, {
-      replace: true,
-      state: { created: true },
-    });
+    setSubmitError(null);
+    try {
+      const environment = await createMutation.mutateAsync(values);
+      navigate(`/environments/${environment.id}`, {
+        replace: true,
+        state: { created: true },
+      });
+    } catch (err: unknown) {
+      const parsed = parseCreateEnvironmentError(err);
+      setSubmitError(parsed);
+      if (parsed.fieldErrors) {
+        applyFieldErrors(form.setError, parsed.fieldErrors);
+      }
+    }
   });
 
   const handleCancel = () => {
@@ -59,7 +100,19 @@ function EnvironmentCreatePage() {
         onSubmit={() => void onSubmit()}
         onCancel={handleCancel}
         isSubmitting={createMutation.isPending}
-        submitError={createMutation.error instanceof Error ? createMutation.error.message : null}
+        submitError={submitError}
+        templates={templates.data}
+        templatesLoading={templates.isLoading}
+        templatesError={templates.isError}
+        onTemplatesRetry={() => templates.refetch()}
+        templateVersions={templateVersions.data}
+        templateVersionsLoading={templateVersions.isLoading}
+        onTemplateIdChange={setSelectedTemplateId}
+        selectedTemplateId={selectedTemplateId}
+        deliveryTargets={deliveryTargets.data}
+        deliveryTargetsLoading={deliveryTargets.isLoading}
+        deliveryTargetsError={deliveryTargets.isError}
+        onDeliveryTargetsRetry={() => deliveryTargets.refetch()}
       />
 
       <Modal

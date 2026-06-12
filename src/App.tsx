@@ -18,6 +18,13 @@ import {
 } from './pages/Admin';
 import SettingsPage from './pages/Settings/SettingsPage';
 import APIKeyPage from './pages/Settings/APIKeyPage';
+import TemplateListPage from './pages/Templates/TemplateListPage';
+import TemplateDetailPage from './pages/Templates/TemplateDetailPage';
+import TemplateCreatePage from './pages/Templates/TemplateCreatePage';
+import TemplateVersionCreatePage from './pages/Templates/TemplateVersionCreatePage';
+import DeliveryTargetListPage from './pages/DeliveryTargets/DeliveryTargetListPage';
+import DeliveryTargetDetailPage from './pages/DeliveryTargets/DeliveryTargetDetailPage';
+import DeliveryTargetCreatePage from './pages/DeliveryTargets/DeliveryTargetCreatePage';
 import NotFoundPage from './pages/Errors/NotFoundPage';
 import ServerErrorPage from './pages/Errors/ServerErrorPage';
 
@@ -40,8 +47,36 @@ function App() {
           <Route path="environments" element={<EnvironmentListPage />} />
           <Route path="environments/new" element={<EnvironmentCreatePage />} />
           <Route path="environments/:id" element={<EnvironmentDetailPage />} />
+          <Route path="templates" element={<TemplateListPage />} />
+          <Route path="templates/:id" element={<TemplateDetailPage />} />
+          <Route path="delivery-targets" element={<DeliveryTargetListPage />} />
+          <Route path="delivery-targets/:id" element={<DeliveryTargetDetailPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/api-keys" element={<APIKeyPage />} />
+          <Route
+            path="admin/templates/new"
+            element={
+              <AdminRoute>
+                <TemplateCreatePage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="admin/templates/:id/versions/new"
+            element={
+              <AdminRoute>
+                <TemplateVersionCreatePage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="admin/delivery-targets/new"
+            element={
+              <AdminRoute>
+                <DeliveryTargetCreatePage />
+              </AdminRoute>
+            }
+          />
           <Route
             path="admin"
             element={

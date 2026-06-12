@@ -72,9 +72,10 @@ Platform users can recover from create-environment errors caused by authorizatio
 - **FR-004**: The system MUST show a review step that summarizes all submitted environment values in a clear, human-readable format before final submission.
 - **FR-005**: The system MUST preserve user-entered create-environment data when submission fails and allow the user to retry after correction.
 - **FR-006**: The system MUST surface backend validation, authorization, and conflict failures as actionable user-facing messages near the create-environment workflow.
-- **FR-007**: The system MUST provide clear loading, empty, and error states for any create-environment data needed from the backend before submission can succeed.
+- **FR-007**: The system MUST provide clear loading, empty, error, and unauthorized states for any create-environment data needed from the backend before submission can succeed.
 - **FR-008**: The system MUST keep unsupported or unavailable platform options from appearing selectable in ways that lead users into guaranteed backend rejection.
 - **FR-009**: Users MUST be able to understand whether a failed create-environment attempt can be fixed by changing form input, retrying later, or requesting additional access.
+- **FR-010**: The system MUST show only deployment inputs that remain part of the active backend-supported create-environment contract, and MUST remove or suppress legacy cluster-focused fields when that contract no longer accepts them.
 
 ### Key Entities *(include if feature involves data)*
 

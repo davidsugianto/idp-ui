@@ -1,19 +1,17 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 1.0.1
+- Version change: 1.0.1 → 1.1.0
 - Modified principles:
-  - III. Contract-Driven Backend Integration → clarified phase-3 backend contracts for environment creation, templates, delivery targets, movements, notifications, and stream failure modes
-  - V. Resilient and Accessible UX → clarified actionable mutation error handling and recovery expectations for create-environment flows
+  - III. Contract-Driven Backend Integration → strengthened language to require template and delivery-target contracts as mandatory (not optional) context for environment creation
 - Added sections:
-  - None
+  - VI. Template and Placement as First-Class Dependencies (new principle)
 - Removed sections:
   - None
 - Templates requiring updates:
-  - ✅ aligned: .specify/templates/plan-template.md
-  - ✅ aligned: .specify/templates/spec-template.md
-  - ✅ aligned: .specify/templates/tasks-template.md
+  - ✅ updated: .specify/templates/plan-template.md (Constitution Check now includes template/placement governance gate)
+  - ✅ aligned: .specify/templates/spec-template.md (no changes required)
+  - ✅ aligned: .specify/templates/tasks-template.md (no changes required)
   - ⚠ pending: .specify/templates/commands/ (directory not present in this repository)
-  - ✅ updated: README.md
 - Follow-up TODOs:
   - None
 -->
@@ -46,12 +44,18 @@ Clear boundaries keep API drift, caching behavior, and shared state changes loca
 backend behavior MUST document the frontend-facing contract in specs or plan artifacts,
 including required fields, authorization expectations, degraded-data behavior, and
 failure modes. When `idp-core` contracts already exist, UI flows MUST align with those
-contracts instead of inventing parallel assumptions. For Phase 3 platform work, this
-explicitly includes template management, delivery-target selection, environment creation,
-environment movement, notifications, and authenticated event/log streams.
+contracts instead of inventing parallel assumptions. For environment creation, this
+means the UI MUST treat `template_version_id`, `template_inputs`, and
+`delivery_target_id` as mandatory placement inputs when the backend contract requires
+them, and MUST validate availability and version existence before submission. For the
+full Phase 3 platform surface, this explicitly includes template management,
+delivery-target selection, environment creation, environment movement, notifications,
+and authenticated event/log streams.
 
 Rationale: The product vision depends on a separate backend repository, so predictable
-contracts matter more than shared implementation assumptions.
+contracts matter more than shared implementation assumptions. The quickstart validation
+in `idp-core` demonstrates that template version and delivery target are required
+placement inputs for environment creation.
 
 ### IV. Verification Before Merge
 Changes MUST pass `npm run lint`, `npm run typecheck`, `npm run test`, and
@@ -73,6 +77,23 @@ and create/update forms MUST preserve user input whenever recovery is possible.
 
 Rationale: The PRD measures success by adoption and satisfaction, which depend on
 reliable, comprehensible behavior under normal and degraded conditions.
+
+### VI. Template and Placement as First-Class Dependencies
+Environment creation MUST treat template and delivery-target selection as first-class
+placement dependencies, not optional add-ons. The create-environment flow MUST validate
+template version existence and delivery-target availability before submission, aligning
+with the backend contract where `template_version_id`, `template_inputs`, and
+`delivery_target_id` are required placement inputs. Template parameter inputs MUST be
+collected and validated per the selected version's parameter definitions. Delivery
+targets marked unavailable or unhealthy MUST be visibly disabled in the placement UI
+rather than silently filtered, so users understand why a target cannot be selected.
+Template and delivery-target data loading failures MUST surface retryable error states
+without blocking the rest of the create-environment flow.
+
+Rationale: The `idp-core` Phase 3 backend makes templates and delivery targets
+mandatory placement context for environment creation. The UI must reflect this
+dependency clearly so users understand the relationship and can recover when
+placement data is degraded.
 
 ## Additional Constraints
 
@@ -100,6 +121,10 @@ reliable, comprehensible behavior under normal and degraded conditions.
   validation steps MUST be updated in the same planning cycle.
 - For create, move, sync, and other user-triggered mutations, plans and tasks MUST call
   out expected backend error handling and the intended user recovery path.
+- When environment creation depends on template or delivery-target data, plans and tasks
+  MUST validate that the UI fetches, displays, and validates template version existence
+  and delivery-target availability before submission, and MUST include degraded-data
+  recovery paths for option-load failures.
 - Reviews MUST check both code changes and supporting artifacts for compliance with this
   constitution.
 
@@ -121,4 +146,4 @@ Compliance review expectations:
 - Reviews and pre-merge validation MUST confirm the required commands and browser
   validation were completed.
 
-**Version**: 1.0.1 | **Ratified**: 2026-06-05 | **Last Amended**: 2026-06-10
+**Version**: 1.1.0 | **Ratified**: 2026-06-05 | **Last Amended**: 2026-06-10

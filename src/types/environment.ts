@@ -3,7 +3,6 @@ import { z } from 'zod';
 export type EnvironmentStatus = 'active' | 'inactive' | 'creating' | 'deleting' | 'error';
 
 const environmentNamePattern = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
-const resourceQuotaPattern = /^[0-9]+(?:m|Mi|Gi|Ti)?$/;
 
 function optionalTrimmedString(schema?: z.ZodType<string>) {
   return z.preprocess(
@@ -15,7 +14,7 @@ function optionalTrimmedString(schema?: z.ZodType<string>) {
       const trimmed = value.trim();
       return trimmed === '' ? undefined : trimmed;
     },
-    schema ?? z.string(),
+    (schema ?? z.string()).optional(),
   ) as z.ZodType<string | undefined>;
 }
 
@@ -29,9 +28,9 @@ export const createEnvironmentRequestSchema = z.object({
   gitRepoUrl: z.string().trim().url('Enter a valid git repository URL'),
   manifestPath: z.string().trim().min(1, 'Manifest path is required'),
   gitRevision: z.string().trim().min(1, 'Git revision is required'),
-  clusterName: optionalTrimmedString(),
-  resourceQuotaCpu: optionalTrimmedString(z.string().regex(resourceQuotaPattern, 'Use values like 500m or 2')),
-  resourceQuotaMemory: optionalTrimmedString(z.string().regex(resourceQuotaPattern, 'Use values like 512Mi or 2Gi')),
+  templateVersionId: optionalTrimmedString(),
+  templateInputs: z.record(z.string().trim().min(1), z.string().trim().min(1)).optional(),
+  deliveryTargetId: optionalTrimmedString(),
   labels: z.record(z.string().trim().min(1), z.string().trim().min(1)).optional(),
   expiresAt: optionalTrimmedString(z.string().datetime({ offset: true, message: 'Enter a valid expiration date and time' })),
 });
@@ -51,8 +50,6 @@ export interface Environment {
   argoAppName?: string;
   clusterName: string;
   clusterServer?: string;
-  resourceQuotaCpu?: string;
-  resourceQuotaMemory?: string;
   labels?: Record<string, string>;
   ownerId?: string;
   expiresAt?: string | null;
@@ -61,7 +58,118 @@ export interface Environment {
   errorCount: number;
   createdAt: string;
   updatedAt: string;
+  templateVersionId?: string;
+  templateVersionLabel?: string;
+  templateInputs?: Record<string, string>;
+  deliveryTargetId?: string;
+  deliveryTargetName?: string;
 }
+
+export interface TemplateSummary {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  author?: string;
+  authorEmail?: string;
+  visibility?: string;
+  teamId?: string;
+  latestVersion?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TemplateParameter {
+  name: string;
+  displayName: string;
+  type: string;
+  required: boolean;
+  validation?: { pattern?: string; min?: number; max?: number };
+  defaultValue?: string;
+}
+
+export interface TemplateResource {
+  kind: string;
+  name: string;
+  spec: Record<string, string>;
+}
+
+export interface TemplateVersion {
+  id: string;
+  templateId: string;
+  version: string;
+  description?: string;
+  isLatest?: boolean;
+  isStable?: boolean;
+  status?: string;
+  parameters?: TemplateParameter[];
+  resources?: TemplateResource[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DeliveryTarget {
+  id: string;
+  name: string;
+  displayName: string;
+  purpose?: string;
+  availabilityState: string;
+  healthState?: string;
+  clusterName?: string;
+  clusterServer?: string;
+  capacitySummary?: {
+    cpuAvailable?: string;
+    memoryAvailable?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateEnvironmentError {
+  kind: 'validation' | 'unauthorized' | 'forbidden' | 'not_found' | 'conflict' | 'unavailable' | 'unknown';
+  message: string;
+  fieldErrors?: Record<string, string>;
+  retryable: boolean;
+  accessRelated: boolean;
+}
+
+export const createTemplateSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+  description: optionalTrimmedString(z.string().max(500, 'Description must be 500 characters or fewer')),
+  category: optionalTrimmedString(),
+  author: optionalTrimmedString(),
+  authorEmail: optionalTrimmedString(z.string().email('Enter a valid email')),
+  visibility: z.enum(['public', 'team']),
+  teamId: optionalTrimmedString(),
+}).refine(
+  (data) => data.visibility !== 'team' || (data.visibility === 'team' && data.teamId),
+  { message: 'Team ID is required when visibility is set to team', path: ['teamId'] },
+);
+
+export type CreateTemplateRequest = z.infer<typeof createTemplateSchema>;
+
+export const createTemplateVersionSchema = z.object({
+  version: z.string().trim().min(1, 'Version is required'),
+  description: optionalTrimmedString(),
+  isLatest: z.boolean(),
+  isStable: z.boolean(),
+  status: z.enum(['draft', 'stable', 'deprecated']),
+});
+
+export type CreateTemplateVersionRequest = z.infer<typeof createTemplateVersionSchema>;
+
+export const createDeliveryTargetSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+  displayName: z.string().trim().min(1, 'Display name is required'),
+  purpose: z.enum(['dev', 'staging', 'production', 'dr']),
+  clusterName: z.string().trim().min(1, 'Cluster name is required'),
+  clusterServer: optionalTrimmedString(),
+  availabilityState: z.enum(['available', 'unavailable', 'maintenance']),
+  healthState: z.enum(['healthy', 'degraded', 'unhealthy']),
+});
+
+export type CreateDeliveryTargetRequest = z.infer<typeof createDeliveryTargetSchema>;
 
 export interface EnvironmentListQuery {
   search?: string;

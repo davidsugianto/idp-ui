@@ -48,6 +48,7 @@
 - **Frontend Boundary Discipline**: Are service-layer boundaries and state-management choices explicit and consistent?
 - **Contract Coverage**: Are external backend dependencies captured in contracts and reflected in validation guidance?
 - **Verification Strategy**: Does the plan require lint, typecheck, test, build, and browser validation for affected journeys?
+- **Template & Placement Governance**: If the feature involves environment creation, does the plan validate template version existence and delivery-target availability before submission?
 - **UX Resilience**: Are loading, empty, error, and authorization states covered for user-visible flows?
 
 ## Project Structure

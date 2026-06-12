@@ -22,6 +22,15 @@ export const API_PATHS = {
   AUDIT_LOGS: '/v1/audit-logs',
   API_KEYS: '/v1/api-keys',
   API_KEY: (id: string) => `/v1/api-keys/${id}`,
+  TEMPLATES: '/v1/templates',
+  TEMPLATE: (id: string) => `/v1/templates/${id}`,
+  TEMPLATE_VERSIONS: (templateId: string) => `/v1/templates/${templateId}/versions`,
+  TEMPLATE_VERSION: (templateId: string, versionId: string) => `/v1/templates/${templateId}/versions/${versionId}`,
+  TEMPLATE_VERSION_PARAMETERS: (templateId: string, versionId: string) => `/v1/templates/${templateId}/versions/${versionId}/parameters`,
+  TEMPLATE_VERSION_RESOURCES: (templateId: string, versionId: string) => `/v1/templates/${templateId}/versions/${versionId}/resources`,
+  TEMPLATE_VERSION_VALIDATE: (templateId: string, versionId: string) => `/v1/templates/${templateId}/versions/${versionId}/validate`,
+  DELIVERY_TARGETS: '/v1/delivery-targets',
+  DELIVERY_TARGET: (id: string) => `/v1/delivery-targets/${id}`,
 } as const;
 
 export const QUERY_KEYS = {
@@ -36,4 +45,12 @@ export const QUERY_KEYS = {
   adminRoles: ['admin', 'roles'] as const,
   auditLogs: ['admin', 'audit-logs'] as const,
   apiKeys: ['settings', 'api-keys'] as const,
+  templates: ['templates'] as const,
+  templateList: (query?: unknown) => ['templates', 'list', query ?? {}] as const,
+  template: (id: string) => ['templates', 'detail', id] as const,
+  templateVersions: (templateId: string) => ['templates', 'versions', templateId] as const,
+  templateVersion: (templateId: string, versionId: string) => ['templates', 'versions', templateId, versionId] as const,
+  deliveryTargets: ['delivery-targets'] as const,
+  deliveryTargetList: (query?: unknown) => ['delivery-targets', 'list', query ?? {}] as const,
+  deliveryTarget: (id: string) => ['delivery-targets', 'detail', id] as const,
 } as const;

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Button, Card, Col, Row, Space, Typography } from 'antd';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
@@ -21,9 +22,10 @@ interface PageHeaderProps {
   actions?: PageHeaderAction[];
   extra?: ReactNode;
   compact?: boolean;
+  onBack?: () => void;
 }
 
-function PageHeader({ eyebrow, title, description, actions, extra, compact = false }: PageHeaderProps) {
+function PageHeader({ eyebrow, title, description, actions, extra, compact = false, onBack }: PageHeaderProps) {
   return (
     <Card
       bodyStyle={{ padding: compact ? 20 : 24 }}
@@ -49,9 +51,19 @@ function PageHeader({ eyebrow, title, description, actions, extra, compact = fal
                 {eyebrow}
               </Text>
             ) : null}
-            <Title level={2} style={{ margin: 0 }}>
-              {title}
-            </Title>
+            <Space align="center">
+              {onBack ? (
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={onBack}
+                  style={{ padding: 0 }}
+                />
+              ) : null}
+              <Title level={2} style={{ margin: 0 }}>
+                {title}
+              </Title>
+            </Space>
             {description ? <Text type="secondary">{description}</Text> : null}
           </Space>
         </Col>

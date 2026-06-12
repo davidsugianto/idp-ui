@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 IDP UI is the React frontend for the idp-core backend API. It provides a developer self-service portal for environment management, deployment, and monitoring.
 
-**Current state**: Pre-implementation. PRDs and task breakdowns live in `docs/`. No source code exists yet.
+**Current state**: Active development. Template catalog, delivery target browsing, and admin CRUD implemented per spec 004. Specs and tasks live in `specs/`.
 
 ## Commands
 
@@ -61,5 +61,5 @@ VITE_OIDC_CLIENT_ID=idp-core
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read `specs/003-backend-api-ui/plan.md`.
+shell commands, and other important information, read `specs/004-template-placement/plan.md`.
 <!-- SPECKIT END -->

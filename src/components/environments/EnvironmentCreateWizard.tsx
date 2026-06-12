@@ -1,10 +1,10 @@
-import { Alert, Button, Col, DatePicker, Form, Input, Row, Space, Steps, Typography } from 'antd';
+import { Alert, Button, Col, DatePicker, Form, Input, Row, Select, Space, Steps, Typography } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useMemo, useState } from 'react';
-import { Controller, type FieldErrors, type FieldPath, type UseFormReturn } from 'react-hook-form';
+import { Controller, useWatch, type FieldErrors, type FieldPath, type UseFormReturn } from 'react-hook-form';
 import SectionCard from '@/components/common/SectionCard';
-import type { CreateEnvironmentRequest } from '@/types/environment';
+import type { CreateEnvironmentError, CreateEnvironmentRequest, DeliveryTarget, TemplateSummary, TemplateVersion } from '@/types/environment';
 
 const { Text, Title } = Typography;
 
@@ -13,16 +13,46 @@ interface EnvironmentCreateWizardProps {
   onSubmit: () => void;
   onCancel: () => void;
   isSubmitting?: boolean;
-  submitError?: string | null;
+  submitError?: CreateEnvironmentError | null;
+  templates?: TemplateSummary[];
+  templatesLoading?: boolean;
+  templatesError?: boolean;
+  onTemplatesRetry?: () => void;
+  templateVersions?: TemplateVersion[];
+  templateVersionsLoading?: boolean;
+  onTemplateIdChange?: (id: string) => void;
+  selectedTemplateId?: string;
+  deliveryTargets?: DeliveryTarget[];
+  deliveryTargetsLoading?: boolean;
+  deliveryTargetsError?: boolean;
+  onDeliveryTargetsRetry?: () => void;
 }
 
 const stepFields: Array<FieldPath<CreateEnvironmentRequest>[]> = [
   ['name', 'description'],
   ['gitRepoUrl', 'manifestPath', 'gitRevision'],
-  ['clusterName', 'resourceQuotaCpu', 'resourceQuotaMemory', 'expiresAt'],
+  ['deliveryTargetId', 'expiresAt'],
 ];
 
-function EnvironmentCreateWizard({ form, onSubmit, onCancel, isSubmitting = false, submitError }: EnvironmentCreateWizardProps) {
+function EnvironmentCreateWizard({
+  form,
+  onSubmit,
+  onCancel,
+  isSubmitting = false,
+  submitError,
+  templates,
+  templatesLoading,
+  templatesError,
+  onTemplatesRetry,
+  templateVersions,
+  templateVersionsLoading,
+  onTemplateIdChange,
+  selectedTemplateId = '',
+  deliveryTargets,
+  deliveryTargetsLoading,
+  deliveryTargetsError,
+  onDeliveryTargetsRetry,
+}: EnvironmentCreateWizardProps) {
   const {
     control,
     trigger,
@@ -43,7 +73,7 @@ function EnvironmentCreateWizard({ form, onSubmit, onCancel, isSubmitting = fals
       },
       {
         title: 'Deployment',
-        description: 'Set cluster and optional quota or expiration details.',
+        description: 'Select a placement target and set an optional expiration.',
       },
       {
         title: 'Review',
@@ -71,6 +101,17 @@ function EnvironmentCreateWizard({ form, onSubmit, onCancel, isSubmitting = fals
 
   const values = getValues();
 
+  const reviewDisplays = useMemo(() => {
+    const selectedVersion = templateVersions?.find((v) => v.id === values.templateVersionId);
+    const selectedTemplate = templates?.find((t) => t.id === selectedVersion?.templateId);
+    const selectedTarget = deliveryTargets?.find((t) => t.id === values.deliveryTargetId);
+    return {
+      templateDisplay: selectedTemplate?.name,
+      versionDisplay: selectedVersion?.version,
+      deliveryTargetDisplay: selectedTarget?.displayName,
+    };
+  }, [templateVersions, templates, deliveryTargets, values.templateVersionId, values.deliveryTargetId]);
+
   return (
     <Space direction="vertical" size={20} style={{ width: '100%' }}>
       <SectionCard
@@ -80,14 +121,58 @@ function EnvironmentCreateWizard({ form, onSubmit, onCancel, isSubmitting = fals
         <Steps current={currentStep} items={stepItems} responsive />
       </SectionCard>
 
-      {submitError ? <Alert type="error" showIcon message="Failed to create environment" description={submitError} /> : null}
+      {submitError ? (
+        <Alert
+          type="error"
+          showIcon
+          message={
+            submitError.kind === 'validation'
+              ? 'Please fix the highlighted fields'
+              : submitError.kind === 'forbidden'
+                ? 'Access denied'
+                : submitError.kind === 'conflict'
+                  ? 'Resource conflict'
+                  : submitError.kind === 'unauthorized'
+                    ? 'Session expired'
+                    : 'Failed to create environment'
+          }
+          description={
+            <Space direction="vertical" size={4}>
+              <span>{submitError.message}</span>
+              {submitError.retryable && submitError.kind !== 'validation' ? (
+                <Text type="secondary">You can retry this operation.</Text>
+              ) : null}
+              {submitError.kind === 'forbidden' ? (
+                <Text type="secondary">Contact your administrator if you believe this is an error.</Text>
+              ) : null}
+            </Space>
+          }
+        />
+      ) : null}
 
       <SectionCard bodyStyle={{ padding: 28 }}>
         <Form layout="vertical" onFinish={onSubmit}>
           {currentStep === 0 ? <BasicsStep control={control} errors={errors} /> : null}
           {currentStep === 1 ? <SourceStep control={control} errors={errors} /> : null}
-          {currentStep === 2 ? <DeploymentStep control={control} errors={errors} /> : null}
-          {currentStep === 3 ? <ReviewStep values={values} /> : null}
+          {currentStep === 2 ? (
+            <DeploymentStep
+              control={control}
+              errors={errors}
+              templates={templates}
+              templatesLoading={templatesLoading}
+              templatesError={templatesError}
+              onTemplatesRetry={onTemplatesRetry}
+              templateVersions={templateVersions}
+              templateVersionsLoading={templateVersionsLoading}
+              onTemplateIdChange={onTemplateIdChange}
+              selectedTemplateId={selectedTemplateId}
+              deliveryTargets={deliveryTargets}
+              deliveryTargetsLoading={deliveryTargetsLoading}
+              deliveryTargetsError={deliveryTargetsError}
+              onDeliveryTargetsRetry={onDeliveryTargetsRetry}
+            />
+          ) : null}
+          {currentStep === 3 ? <ReviewStep values={values} {...reviewDisplays} /> : null}
 
           <div
             style={{
@@ -100,13 +185,13 @@ function EnvironmentCreateWizard({ form, onSubmit, onCancel, isSubmitting = fals
               flexWrap: 'wrap',
             }}
           >
-            <Button onClick={currentStep === 0 ? onCancel : previousStep}>
+            <Button htmlType="button" onClick={currentStep === 0 ? onCancel : previousStep}>
               {currentStep === 0 ? 'Cancel' : 'Back'}
             </Button>
             <Space>
               <Text type="secondary">Step {currentStep + 1} of {stepItems.length}</Text>
               {currentStep < stepItems.length - 1 ? (
-                <Button type="primary" onClick={() => void nextStep()}>
+                <Button type="primary" htmlType="button" onClick={() => void nextStep()}>
                   Continue
                 </Button>
               ) : (
@@ -226,44 +311,186 @@ function SourceStep({ control, errors }: StepProps) {
   );
 }
 
-function DeploymentStep({ control, errors }: StepProps) {
+interface DeploymentStepProps extends StepProps {
+  templates?: TemplateSummary[];
+  templatesLoading?: boolean;
+  templatesError?: boolean;
+  onTemplatesRetry?: () => void;
+  templateVersions?: TemplateVersion[];
+  templateVersionsLoading?: boolean;
+  onTemplateIdChange?: (id: string) => void;
+  selectedTemplateId?: string;
+  deliveryTargets?: DeliveryTarget[];
+  deliveryTargetsLoading?: boolean;
+  deliveryTargetsError?: boolean;
+  onDeliveryTargetsRetry?: () => void;
+}
+
+function DeploymentStep({
+  control,
+  errors,
+  templates,
+  templatesLoading,
+  templatesError,
+  onTemplatesRetry,
+  templateVersions,
+  templateVersionsLoading,
+  onTemplateIdChange,
+  selectedTemplateId,
+  deliveryTargets,
+  deliveryTargetsLoading,
+  deliveryTargetsError,
+  onDeliveryTargetsRetry,
+}: DeploymentStepProps) {
+  const watchedTemplateVersionId = useWatch({ control, name: 'templateVersionId' });
+
+  const templateOptions = useMemo(() => {
+    const items = templates ?? [];
+    return items.map((t) => ({ label: t.name, value: t.id }));
+  }, [templates]);
+
+  const versionOptions = useMemo(() => {
+    const items = templateVersions ?? [];
+    return items.map((v) => ({ label: v.version, value: v.id }));
+  }, [templateVersions]);
+
+  const selectedVersion = useMemo(() => {
+    if (!templateVersions || !watchedTemplateVersionId) return undefined;
+    return templateVersions.find((v) => v.id === watchedTemplateVersionId);
+  }, [templateVersions, watchedTemplateVersionId]);
+
+  const targetOptions = useMemo(() => {
+    const items = deliveryTargets ?? [];
+    return items.map((t) => ({
+      label: `${t.displayName}${t.availabilityState !== 'available' ? ' (unavailable)' : ''}`,
+      value: t.id,
+      disabled: t.availabilityState !== 'available',
+    }));
+  }, [deliveryTargets]);
+
   return (
     <>
-      <StepHeader title="Deployment settings" description="Choose the target cluster and add optional quota or lifetime constraints for the new environment." />
-      <Controller
-        name="clusterName"
-        control={control}
-        render={({ field }) => (
-          <Form.Item label="Cluster name" validateStatus={errors.clusterName ? 'error' : ''} help={errors.clusterName?.message}>
-            <Input {...field} placeholder="prod-us-east" />
-          </Form.Item>
-        )}
-      />
+      <StepHeader title="Deployment settings" description="Choose optional template context, a placement target, and lifetime constraints for the new environment." />
+
+      {templatesError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="Failed to load templates"
+          action={onTemplatesRetry ? <Button size="small" onClick={onTemplatesRetry}>Retry</Button> : undefined}
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
 
       <Row gutter={20}>
-        <Col xs={24} lg={8}>
+        <Col xs={24} lg={12}>
           <Controller
-            name="resourceQuotaCpu"
+            name="templateVersionId"
             control={control}
             render={({ field }) => (
-              <Form.Item label="CPU quota" validateStatus={errors.resourceQuotaCpu ? 'error' : ''} help={errors.resourceQuotaCpu?.message}>
-                <Input {...field} placeholder="500m" />
+              <Form.Item label="Template" help="Optional. Select a template and version to pre-configure the environment.">
+                <Select
+                  loading={templatesLoading}
+                  placeholder="Select a template"
+                  options={templateOptions}
+                  allowClear
+                  notFoundContent={templatesLoading ? 'Loading templates...' : 'No templates available'}
+                  value={selectedTemplateId || undefined}
+                  onChange={(templateId: string | undefined) => {
+                    if (!templateId) {
+                      field.onChange('');
+                      onTemplateIdChange?.('');
+                      return;
+                    }
+                    onTemplateIdChange?.(templateId);
+                  }}
+                />
               </Form.Item>
             )}
           />
         </Col>
-        <Col xs={24} lg={8}>
+        <Col xs={24} lg={12}>
           <Controller
-            name="resourceQuotaMemory"
+            name="templateVersionId"
             control={control}
             render={({ field }) => (
-              <Form.Item label="Memory quota" validateStatus={errors.resourceQuotaMemory ? 'error' : ''} help={errors.resourceQuotaMemory?.message}>
-                <Input {...field} placeholder="512Mi" />
+              <Form.Item label="Template version" help="Select the version to use.">
+                <Select
+                  {...field}
+                  loading={templateVersionsLoading}
+                  placeholder="Select a version"
+                  options={versionOptions}
+                  allowClear
+                  notFoundContent={templateVersionsLoading ? 'Loading versions...' : 'Select a template first'}
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                />
               </Form.Item>
             )}
           />
         </Col>
-        <Col xs={24} lg={8}>
+      </Row>
+
+      {selectedVersion?.parameters && selectedVersion.parameters.length > 0 ? (
+        <Controller
+          name="templateInputs"
+          control={control}
+          render={({ field }) => (
+            <Row gutter={20}>
+              {selectedVersion.parameters!.map((param) => (
+                <Col key={param.name} xs={24} lg={12}>
+                  <Form.Item
+                    label={param.displayName}
+                    required={param.required}
+                    help={param.validation?.pattern ? `Pattern: ${param.validation.pattern}` : undefined}
+                  >
+                    <Input
+                      placeholder={param.defaultValue ?? param.displayName}
+                      value={field.value?.[param.name] ?? ''}
+                      onChange={(e) => field.onChange({ ...field.value, [param.name]: e.target.value })}
+                    />
+                  </Form.Item>
+                </Col>
+              ))}
+            </Row>
+          )}
+        />
+      ) : null}
+
+      <Title level={5} style={{ marginTop: 16, marginBottom: 12 }}>Placement</Title>
+
+      {deliveryTargetsError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="Failed to load delivery targets"
+          action={onDeliveryTargetsRetry ? <Button size="small" onClick={onDeliveryTargetsRetry}>Retry</Button> : undefined}
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
+
+      <Row gutter={20}>
+        <Col xs={24} lg={12}>
+          <Controller
+            name="deliveryTargetId"
+            control={control}
+            render={({ field }) => (
+              <Form.Item label="Delivery target" validateStatus={errors.deliveryTargetId ? 'error' : ''} help={errors.deliveryTargetId?.message ?? 'Optional. Select a placement target for this environment.'}>
+                <Select
+                  {...field}
+                  loading={deliveryTargetsLoading}
+                  placeholder="Select a delivery target"
+                  options={targetOptions}
+                  allowClear
+                  notFoundContent={deliveryTargetsLoading ? 'Loading targets...' : 'No delivery targets available'}
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                />
+              </Form.Item>
+            )}
+          />
+        </Col>
+        <Col xs={24} lg={12}>
           <Controller
             name="expiresAt"
             control={control}
@@ -285,7 +512,12 @@ function DeploymentStep({ control, errors }: StepProps) {
   );
 }
 
-function ReviewStep({ values }: { values: CreateEnvironmentRequest }) {
+function ReviewStep({ values, templateDisplay, versionDisplay, deliveryTargetDisplay }: {
+  values: CreateEnvironmentRequest;
+  templateDisplay?: string;
+  versionDisplay?: string;
+  deliveryTargetDisplay?: string;
+}) {
   return (
     <Space direction="vertical" size={20} style={{ width: '100%' }}>
       <StepHeader title="Review configuration" description="Confirm the submitted values before the environment is created." />
@@ -313,9 +545,9 @@ function ReviewStep({ values }: { values: CreateEnvironmentRequest }) {
           <ReviewCard
             title="Deployment"
             rows={[
-              ['Cluster name', values.clusterName],
-              ['CPU quota', values.resourceQuotaCpu],
-              ['Memory quota', values.resourceQuotaMemory],
+              ['Template', templateDisplay],
+              ['Template version', versionDisplay],
+              ['Delivery target', deliveryTargetDisplay],
               ['Expires at', values.expiresAt ? dayjs(values.expiresAt).format('YYYY-MM-DD HH:mm:ss') : undefined],
             ]}
           />
