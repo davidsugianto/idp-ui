@@ -2,9 +2,16 @@ import api from './api';
 import { API_PATHS } from '@/constants/api';
 import type {
   CreateEnvironmentRequest,
+  CreateEnvironmentError,
+  CreateTemplateRequest,
+  CreateTemplateVersionRequest,
+  CreateDeliveryTargetRequest,
+  DeliveryTarget,
   Environment,
   EnvironmentListQuery,
   EnvironmentStatus,
+  TemplateSummary,
+  TemplateVersion,
   WorkloadStatusResponse,
 } from '@/types/environment';
 
@@ -21,8 +28,6 @@ interface EnvironmentApiResponse {
   argo_app_name?: string;
   cluster_name?: string;
   cluster_server?: string;
-  resource_quota_cpu?: string;
-  resource_quota_memory?: string;
   labels?: Record<string, string>;
   owner_id?: string;
   expires_at?: string | null;
@@ -31,6 +36,11 @@ interface EnvironmentApiResponse {
   error_count?: number;
   created_at: string;
   updated_at: string;
+  template_version_id?: string;
+  template_version_label?: string;
+  template_inputs?: Record<string, string>;
+  delivery_target_id?: string;
+  delivery_target_name?: string;
 }
 
 interface WorkloadApiResponse {
@@ -90,8 +100,6 @@ function normalizeEnvironment(payload: EnvironmentApiResponse): Environment {
     argoAppName: payload.argo_app_name,
     clusterName: payload.cluster_name || '',
     clusterServer: payload.cluster_server,
-    resourceQuotaCpu: payload.resource_quota_cpu,
-    resourceQuotaMemory: payload.resource_quota_memory,
     labels: payload.labels,
     ownerId: payload.owner_id,
     expiresAt: payload.expires_at,
@@ -100,6 +108,11 @@ function normalizeEnvironment(payload: EnvironmentApiResponse): Environment {
     errorCount: payload.error_count ?? 0,
     createdAt: payload.created_at,
     updatedAt: payload.updated_at,
+    templateVersionId: payload.template_version_id,
+    templateVersionLabel: payload.template_version_label,
+    templateInputs: payload.template_inputs,
+    deliveryTargetId: payload.delivery_target_id,
+    deliveryTargetName: payload.delivery_target_name,
   };
 }
 
@@ -138,9 +151,9 @@ function toCreateEnvironmentPayload(request: CreateEnvironmentRequest) {
     git_repo_url: request.gitRepoUrl,
     manifest_path: request.manifestPath,
     git_revision: request.gitRevision,
-    cluster_name: request.clusterName,
-    resource_quota_cpu: request.resourceQuotaCpu,
-    resource_quota_memory: request.resourceQuotaMemory,
+    template_version_id: request.templateVersionId,
+    template_inputs: request.templateInputs,
+    delivery_target_id: request.deliveryTargetId,
     labels: request.labels,
     expires_at: request.expiresAt,
   });
@@ -176,4 +189,287 @@ export async function syncEnvironment(id: string) {
 export async function getEnvironmentWorkloads(id: string): Promise<WorkloadStatusResponse> {
   const res = await api.get<WorkloadStatusApiResponse | { data?: WorkloadStatusApiResponse }>(API_PATHS.ENVIRONMENT_WORKLOADS(id));
   return normalizeWorkloadStatus(unwrapResponseData<WorkloadStatusApiResponse>(res.data));
+}
+
+export function parseCreateEnvironmentError(error: unknown): CreateEnvironmentError {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const axiosError = error as { response?: { status?: number; data?: Record<string, unknown> } };
+    const status = axiosError.response?.status;
+    const data = axiosError.response?.data;
+
+    if (status === 400) {
+      return {
+        kind: 'validation',
+        message: (data?.message as string) || 'Invalid input. Please check the highlighted fields and try again.',
+        fieldErrors: data?.field_errors as Record<string, string> | undefined,
+        retryable: true,
+        accessRelated: false,
+      };
+    }
+    if (status === 401) {
+      return { kind: 'unauthorized', message: 'Your session has expired. Please sign in again.', retryable: false, accessRelated: false };
+    }
+    if (status === 403) {
+      return { kind: 'forbidden', message: (data?.message as string) || 'You do not have permission to create environments.', retryable: false, accessRelated: true };
+    }
+    if (status === 404) {
+      return { kind: 'not_found', message: (data?.message as string) || 'The selected template version or delivery target is no longer available.', retryable: true, accessRelated: false };
+    }
+    if (status === 409) {
+      return { kind: 'conflict', message: (data?.message as string) || 'An environment with this name already exists.', retryable: true, accessRelated: false };
+    }
+    if (status && status >= 500) {
+      return { kind: 'unavailable', message: 'The server is temporarily unavailable. You can retry in a moment.', retryable: true, accessRelated: false };
+    }
+  }
+
+  if (error instanceof Error) {
+    return { kind: 'unknown', message: error.message, retryable: true, accessRelated: false };
+  }
+
+  return { kind: 'unknown', message: 'An unexpected error occurred.', retryable: true, accessRelated: false };
+}
+
+interface TemplateApiResponse {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  author?: string;
+  author_email?: string;
+  visibility?: string;
+  team_id?: string;
+  latest_version?: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface TemplateVersionApiResponse {
+  id: string;
+  template_id: string;
+  version: string;
+  description?: string;
+  is_latest?: boolean;
+  is_stable?: boolean;
+  status?: string;
+  parameters?: Array<{
+    name: string;
+    display_name: string;
+    type: string;
+    required: boolean;
+    validation?: { pattern?: string; min?: number; max?: number };
+    default_value?: string;
+  }>;
+  resources?: Array<{
+    kind: string;
+    name: string;
+    spec: Record<string, string>;
+  }>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface DeliveryTargetApiResponse {
+  id: string;
+  name: string;
+  display_name: string;
+  purpose?: string;
+  availability_state: string;
+  health_state?: string;
+  cluster_name?: string;
+  cluster_server?: string;
+  capacity_summary?: {
+    cpu_available?: string;
+    memory_available?: string;
+  };
+  created_at?: string;
+  updated_at?: string;
+}
+
+function normalizeTemplate(payload: TemplateApiResponse): TemplateSummary {
+  return {
+    id: payload.id,
+    name: payload.name,
+    description: payload.description,
+    category: payload.category,
+    author: payload.author,
+    authorEmail: payload.author_email,
+    visibility: payload.visibility,
+    teamId: payload.team_id,
+    latestVersion: payload.latest_version,
+    status: payload.status,
+    createdAt: payload.created_at,
+    updatedAt: payload.updated_at,
+  };
+}
+
+function normalizeTemplateVersion(payload: TemplateVersionApiResponse): TemplateVersion {
+  return {
+    id: payload.id,
+    templateId: payload.template_id,
+    version: payload.version,
+    description: payload.description,
+    isLatest: payload.is_latest,
+    isStable: payload.is_stable,
+    status: payload.status,
+    parameters: payload.parameters?.map((p) => ({
+      name: p.name,
+      displayName: p.display_name,
+      type: p.type,
+      required: p.required,
+      validation: p.validation,
+      defaultValue: p.default_value,
+    })),
+    resources: payload.resources?.map((r) => ({
+      kind: r.kind,
+      name: r.name,
+      spec: r.spec,
+    })),
+    createdAt: payload.created_at,
+    updatedAt: payload.updated_at,
+  };
+}
+
+function normalizeDeliveryTarget(payload: DeliveryTargetApiResponse): DeliveryTarget {
+  return {
+    id: payload.id,
+    name: payload.name,
+    displayName: payload.display_name,
+    purpose: payload.purpose,
+    availabilityState: payload.availability_state,
+    healthState: payload.health_state,
+    clusterName: payload.cluster_name,
+    clusterServer: payload.cluster_server,
+    capacitySummary: payload.capacity_summary && {
+      cpuAvailable: payload.capacity_summary.cpu_available,
+      memoryAvailable: payload.capacity_summary.memory_available,
+    },
+    createdAt: payload.created_at,
+    updatedAt: payload.updated_at,
+  };
+}
+
+function unwrapListResponse<T>(payload: unknown, arrayKey: string): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === 'object') {
+    // Try the expected key first, then common alternatives
+    const keys = [arrayKey, 'items', 'results', 'data'];
+    for (const key of keys) {
+      const value = (payload as Record<string, unknown>)[key];
+      if (Array.isArray(value)) return value as T[];
+    }
+  }
+  return [];
+}
+
+export async function listTemplates(): Promise<TemplateSummary[]> {
+  const res = await api.get<TemplateApiResponse[] | { data?: TemplateApiResponse[] }>(API_PATHS.TEMPLATES);
+  const payload = unwrapResponseData<TemplateApiResponse[]>(res.data);
+  const items = unwrapListResponse<TemplateApiResponse>(payload, 'templates');
+  return items.map(normalizeTemplate);
+}
+
+export async function getTemplate(id: string): Promise<TemplateSummary> {
+  const res = await api.get<TemplateApiResponse | { data?: TemplateApiResponse }>(API_PATHS.TEMPLATE(id));
+  return normalizeTemplate(unwrapResponseData<TemplateApiResponse>(res.data));
+}
+
+export async function listTemplateVersions(templateId: string): Promise<TemplateVersion[]> {
+  const res = await api.get<TemplateVersionApiResponse[] | { data?: TemplateVersionApiResponse[] }>(API_PATHS.TEMPLATE_VERSIONS(templateId));
+  const payload = unwrapResponseData<TemplateVersionApiResponse[]>(res.data);
+  const items = unwrapListResponse<TemplateVersionApiResponse>(payload, 'versions');
+  return items.map(normalizeTemplateVersion);
+}
+
+export async function getTemplateVersion(templateId: string, versionId: string): Promise<TemplateVersion> {
+  const res = await api.get<TemplateVersionApiResponse | { data?: TemplateVersionApiResponse }>(API_PATHS.TEMPLATE_VERSION(templateId, versionId));
+  return normalizeTemplateVersion(unwrapResponseData<TemplateVersionApiResponse>(res.data));
+}
+
+export async function listDeliveryTargets(): Promise<DeliveryTarget[]> {
+  const res = await api.get<DeliveryTargetApiResponse[] | { data?: DeliveryTargetApiResponse[] }>(API_PATHS.DELIVERY_TARGETS);
+  const payload = unwrapResponseData<DeliveryTargetApiResponse[]>(res.data);
+  const items = unwrapListResponse<DeliveryTargetApiResponse>(payload, 'targets');
+  return items.map(normalizeDeliveryTarget);
+}
+
+export async function getDeliveryTarget(id: string): Promise<DeliveryTarget> {
+  const res = await api.get<DeliveryTargetApiResponse | { data?: DeliveryTargetApiResponse }>(API_PATHS.DELIVERY_TARGET(id));
+  return normalizeDeliveryTarget(unwrapResponseData<DeliveryTargetApiResponse>(res.data));
+}
+
+export async function createTemplate(request: CreateTemplateRequest): Promise<TemplateSummary> {
+  const payload: Record<string, unknown> = {
+    name: request.name,
+    description: request.description,
+    category: request.category,
+    author: request.author,
+    author_email: request.authorEmail,
+    visibility: request.visibility,
+  };
+  if (request.teamId) {
+    payload.team_id = request.teamId;
+  }
+  const res = await api.post<TemplateApiResponse | { data?: TemplateApiResponse }>(API_PATHS.TEMPLATES, payload);
+  return normalizeTemplate(unwrapResponseData<TemplateApiResponse>(res.data));
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  await api.delete(API_PATHS.TEMPLATE(id));
+}
+
+export async function createTemplateVersion(
+  templateId: string,
+  request: CreateTemplateVersionRequest,
+): Promise<TemplateVersion> {
+  const res = await api.post<TemplateVersionApiResponse | { data?: TemplateVersionApiResponse }>(
+    API_PATHS.TEMPLATE_VERSIONS(templateId),
+    {
+      version: request.version,
+      description: request.description,
+      is_latest: request.isLatest,
+      is_stable: request.isStable,
+      status: request.status,
+    },
+  );
+  return normalizeTemplateVersion(unwrapResponseData<TemplateVersionApiResponse>(res.data));
+}
+
+export async function createDeliveryTarget(request: CreateDeliveryTargetRequest): Promise<DeliveryTarget> {
+  const res = await api.post<DeliveryTargetApiResponse | { data?: DeliveryTargetApiResponse }>(
+    API_PATHS.DELIVERY_TARGETS,
+    {
+      name: request.name,
+      display_name: request.displayName,
+      purpose: request.purpose,
+      cluster_name: request.clusterName,
+      cluster_server: request.clusterServer,
+      availability_state: request.availabilityState,
+      health_state: request.healthState,
+    },
+  );
+  return normalizeDeliveryTarget(unwrapResponseData<DeliveryTargetApiResponse>(res.data));
+}
+
+export async function updateDeliveryTarget(
+  id: string,
+  request: Partial<Pick<CreateDeliveryTargetRequest, 'availabilityState' | 'healthState'>>,
+): Promise<DeliveryTarget> {
+  const payload: Record<string, unknown> = {};
+  if (request.availabilityState) {
+    payload.availability_state = request.availabilityState;
+  }
+  if (request.healthState) {
+    payload.health_state = request.healthState;
+  }
+  const res = await api.patch<DeliveryTargetApiResponse | { data?: DeliveryTargetApiResponse }>(
+    API_PATHS.DELIVERY_TARGET(id),
+    payload,
+  );
+  return normalizeDeliveryTarget(unwrapResponseData<DeliveryTargetApiResponse>(res.data));
+}
+
+export async function deleteDeliveryTarget(id: string): Promise<void> {
+  await api.delete(API_PATHS.DELIVERY_TARGET(id));
 }
